@@ -57,4 +57,32 @@ export const data: HttpLog[] = [
     id: "8",
     domain: "example.com",
   },
+  {
+    domain: "foo.com",
+    method: "GET",
+    path: "/",
+    statusCode: 200,
+    id: "9",
+  },
+  {
+    domain: "google.com",
+    method: "GET",
+    path: "/api/v1/ads",
+    statusCode: 501,
+    id: "10",
+  },
+  {
+    domain: "google.com",
+    method: "GET",
+    path: "/search",
+    statusCode: 200,
+    id: "11",
+  },
+  {
+    domain: "speakeasy.com",
+    method: "GET",
+    path: "/api/v1/users",
+    statusCode: 500,
+    id: "12",
+  },
 ];
