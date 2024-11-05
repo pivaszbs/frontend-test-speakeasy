@@ -1,7 +1,11 @@
-interface FuzzySearchProps {
-  // Add some props
+interface FuzzySearchProps<T> {
+  data: T[];
 }
 
-export function FuzzySearch(props: FuzzySearchProps) {
-  return <div>Implement me</div>;
+export function FuzzySearch<T>(props: FuzzySearchProps<T>) {
+  return (
+    <div>
+      <h1>Implement me!</h1>
+    </div>
+  );
 }
