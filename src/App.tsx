@@ -38,8 +38,7 @@ function App() {
   const [data, setData] = useState<HttpLog[]>(sampleData);
   return (
     <div className="my-10 flex flex-col items-center gap-14 justify-start h-full">
-      {/* We're going to be implementing the FuzzySearch component here */}
-      <FuzzySearch data={data} onChange={setData} />
+      <FuzzySearch data={sampleData} onChange={setData} />
 
       <Table
         data={data}
