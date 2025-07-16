@@ -29,6 +29,7 @@ function highlightMatch(option: string, filter: string | undefined) {
 
 export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose, filter }: DropdownProps) => {
   const [style, setStyle] = useState<React.CSSProperties>({});
+  const optionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
@@ -44,17 +45,24 @@ export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose, filte
     }
   }, [visible, anchorRef]);
 
+  // Keyboard navigation and focus are handled internally
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useClickOutside([anchorRef, dropdownRef], () => onClose());
+
+  // Internal keyboard navigation
   useEffect(() => {
+    if (!visible) return;
     const handleKey = (e: KeyboardEvent) => {
       if (!visible) return;
-
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setActiveIndex((prev) => (prev + 1) % options.length);
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setActiveIndex((prev) => (prev - 1 + options.length) % options.length);
-      } else if (e.key === "Enter") {
+      } else if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         onSelect(options[activeIndex]);
       } else if (e.key === "Escape") {
@@ -62,23 +70,31 @@ export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose, filte
         onClose();
       }
     };
-
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [visible, activeIndex, options, onSelect]);
-
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useClickOutside([anchorRef, dropdownRef], () => onClose());
+  }, [visible, options, onSelect, onClose, activeIndex]);
 
   if (!visible || options.length === 0) return null;
 
   return ReactDOM.createPortal(
-    <div ref={dropdownRef} style={style} className="border border-dashed border-gray-300 bg-zinc-900 text-white mt-1 rounded-md shadow">
+    <div
+      ref={dropdownRef}
+      style={style}
+      className="border border-dashed border-gray-300 bg-zinc-900 text-white mt-1 rounded-md shadow"
+      role="listbox"
+      aria-activedescendant={options[activeIndex] ? `dropdown-option-${options[activeIndex]}` : undefined}
+      tabIndex={-1}
+    >
       {options.map((option, index) => (
         <div
           key={option}
+          id={`dropdown-option-${option}`}
+          ref={el => optionRefs.current[index] = el}
+          role="option"
+          aria-selected={index === activeIndex}
+          tabIndex={-1}
           onClick={() => onSelect(option)}
+          onMouseEnter={() => setActiveIndex(index)}
           className={`p-2 cursor-pointer hover:bg-zinc-800 ${index === activeIndex ? "bg-zinc-800" : ""}`}
         >
           {highlightMatch(option, filter)}
