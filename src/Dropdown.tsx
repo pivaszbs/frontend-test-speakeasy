@@ -54,7 +54,7 @@ export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose }: Dro
 
   useClickOutside([anchorRef, dropdownRef], () => onClose());
 
-  if (!visible) return null;
+  if (!visible || options.length === 0) return null;
 
   return ReactDOM.createPortal(
     <div ref={dropdownRef} style={style} className="border border-dashed border-gray-300 bg-zinc-900 text-white mt-1 rounded-md shadow">

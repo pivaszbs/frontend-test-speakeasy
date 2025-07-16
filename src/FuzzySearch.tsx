@@ -67,6 +67,12 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.value.charAt(e.target.value.length - 1) === ":") {
+      setMode('value');
+    } else if (inputValue.charAt(inputValue.length - 1) === ":" && e.target.value.length - inputValue.length === -1) {
+      setMode('facet');
+    }
+
     setInputValue(e.target.value);
     setShowDropdown(true);
   };
