@@ -2,15 +2,32 @@ import { useState, useEffect, useRef } from "react";
 import ReactDOM from "react-dom";
 import { useClickOutside } from "./useClickOutside";
 
+
+export type DropdownOption = string;
+
 interface DropdownProps {
-  options: string[];
+  options: DropdownOption[];
   anchorRef: React.RefObject<HTMLElement>;
   visible: boolean;
   onSelect: (value: string) => void;
   onClose: () => void;
+  filter?: string;
 }
 
-export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose }: DropdownProps) => {
+function highlightMatch(option: string, filter: string | undefined) {
+  if (!filter) return option;
+  const idx = option.toLowerCase().indexOf(filter.toLowerCase());
+  if (idx === -1) return option;
+  return (
+    <>
+      {option.slice(0, idx)}
+      <span className="font-bold">{option.slice(idx, idx + filter.length)}</span>
+      {option.slice(idx + filter.length)}
+    </>
+  );
+}
+
+export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose, filter }: DropdownProps) => {
   const [style, setStyle] = useState<React.CSSProperties>({});
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -64,11 +81,11 @@ export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose }: Dro
           onClick={() => onSelect(option)}
           className={`p-2 cursor-pointer hover:bg-zinc-800 ${index === activeIndex ? "bg-zinc-800" : ""}`}
         >
-          {option}
+          {highlightMatch(option, filter)}
         </div>
       ))}
     </div>,
     document.body
   );
-};export type DropdownOption = string;
+};
 

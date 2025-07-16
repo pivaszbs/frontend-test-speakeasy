@@ -49,7 +49,7 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
   const facetKeys = Array.from(new Set(data.flatMap((obj: HttpLog) => Object.keys(obj)))) as HttpLogKey[];
   const facetOptions: DropdownOption[] = facetKeys.map(String)
     .filter(facet => !filters.some(f => f.facet === facet))
-    .filter(facet => facet.startsWith(inputValue)
+    .filter(facet => facet.toLowerCase().includes(inputValue.toLowerCase())
   );
 
   // Get unique values for a facet
@@ -59,9 +59,9 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
     const valueFilter = inputValue.replace(`${selectedFacet}:`, '');
 
     const filtered = filters.reduce(
-        (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]) === filter.value),
+        (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase()),
         data
-      ).filter(logItem => String(logItem[selectedFacet]).startsWith(valueFilter));
+      ).filter(logItem => String(logItem[selectedFacet]).toLowerCase().includes(valueFilter.toLowerCase()));
 
     return Array.from(new Set(filtered.map((obj: HttpLog) => obj[facet]))).map(String);
   };
@@ -95,7 +95,7 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
       setFilters(newFilters);
       // Filter data and call onChange
       const filtered = newFilters.reduce(
-        (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]) === filter.value),
+        (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase()),
         data
       );
       onChange(filtered);
@@ -116,7 +116,7 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
     const newFilters = filters.filter((_, i) => i !== idx);
     setFilters(newFilters);
     const filtered = newFilters.reduce(
-      (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]) === filter.value),
+      (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase()),
       data
     );
     onChange(filtered);
@@ -148,6 +148,11 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
         visible={showDropdown}
         onSelect={handleSelect}
         onClose={handleClose}
+        filter={mode === 'facet'
+          ? inputValue
+          : selectedFacet
+            ? inputValue.replace(`${selectedFacet}:`, '')
+            : ''}
       />
     </div>
   );
