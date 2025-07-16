@@ -36,6 +36,7 @@ const columns: Column<HttpLog>[] = [
 
 function App() {
   const [data, setData] = useState<HttpLog[]>(sampleData);
+  
   return (
     <div className="my-10 flex flex-col items-center gap-14 justify-start h-full">
       <FuzzySearch data={sampleData} onChange={setData} />
