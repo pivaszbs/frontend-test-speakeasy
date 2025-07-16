@@ -3,13 +3,13 @@ import { useState, useRef } from "react";
 import type { HttpLog } from "./types";
 import { Dropdown, DropdownOption } from "./Dropdown";
 // Tag component with states: 'started' and 'completed'
-interface TagProps {
+interface TagProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   state: 'started' | 'completed';
   onClick?: () => void;
 }
 
-function Tag({ children, state, onClick }: TagProps) {
+function Tag({ children, state, onClick, ...rest }: TagProps) {
   const base =
     "inline-flex select-none rounded-full px-3 py-1 text-sm cursor-pointer transition-colors";
   const started =
@@ -24,6 +24,7 @@ function Tag({ children, state, onClick }: TagProps) {
         (state === "started" ? started : completed)
       }
       onClick={onClick}
+      {...rest}
     >
       {children}
     </div>
@@ -38,6 +39,22 @@ interface FuzzySearchProps {
 type HttpLogKey = keyof HttpLog;
 
 export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
+  // Instantly transform completed tag to started input on focus
+  const handleTagFocus = (idx: number, filter: { facet: HttpLogKey; value: string }) => () => {
+    const newFilters = filters.filter((_, i) => i !== idx);
+    setFilters(newFilters);
+    setStartedInput(`${filter.facet}:${filter.value}`.trim());
+    setStartedMode('value');
+    setStartedFacet(filter.facet);
+    setTimeout(() => {
+      startedInputRef.current?.focus();
+      // Move cursor to end
+      if (startedInputRef.current) {
+        const len = startedInputRef.current.value.length;
+        startedInputRef.current.setSelectionRange(len, len);
+      }
+    }, 0);
+  };
   // Completed tags
   const [filters, setFilters] = useState<{ facet: HttpLogKey; value: string }[]>([]);
   // Tag in progress ("started" input)
@@ -77,6 +94,41 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
       setStartedMode('facet');
       setStartedFacet(null);
       setTimeout(() => invisibleInputRef.current?.focus(), 0);
+    }
+  };
+
+  // Focus the last completed tag
+  const focusLastTag = () => {
+    const tagElements = containerRef.current?.querySelectorAll('[data-tag-idx]');
+    if (tagElements && tagElements.length > 0) {
+      const lastTag = tagElements[tagElements.length - 1] as HTMLElement;
+      lastTag?.focus();
+    }
+  };
+
+  // Keydown handler for invisible input
+  const handleInvisibleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Remove last tag on backspace if input is empty
+    if (e.key === 'Backspace' && filters.length > 0 && startedInput.length === 0) {
+      e.preventDefault();
+      const newFilters = filters.slice(0, -1);
+      setFilters(newFilters);
+      // Optionally, update filtered data
+      const filtered = newFilters.reduce(
+        (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase()),
+        data
+      );
+      onChange(filtered);
+      return;
+    }
+    if (
+      (e.key === 'ArrowLeft' && (invisibleInputRef.current?.selectionStart === 0)) ||
+      (e.key === 'Tab' && e.shiftKey)
+    ) {
+      if (filters.length > 0) {
+        e.preventDefault();
+        focusLastTag();
+      }
     }
   };
 
@@ -165,6 +217,9 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
             key={idx}
             state="completed"
             onClick={() => handleRemoveFilter(idx)}
+            tabIndex={0}
+            data-tag-idx={idx}
+            onFocus={handleTagFocus(idx, filter)}
           >
             {filter.facet}: {filter.value} ✕
           </Tag>
@@ -176,7 +231,7 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
               ref={startedInputRef}
               value={startedInput}
               onChange={handleStartedInputChange}
-              size={Math.max(1, startedInput.length)}
+              size={startedInput.length}
               onFocus={() => setShowDropdown(true)}
               onBlur={handleInvisibleInputFocus}
               placeholder={startedMode === 'facet' ? 'Choose a facet…' : startedFacet ? `Choose value for ${startedFacet}…` : ''}
@@ -194,6 +249,7 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
           value={''}
           onFocus={handleInvisibleInputFocus}
           onChange={handleInvisibleInputChange}
+          onKeyDown={handleInvisibleInputKeyDown}
           tabIndex={0}
           placeholder={filters.length === 0 && startedInput.length === 0 ? 'Type to add filter…' : ''}
           aria-label="Add filter"
