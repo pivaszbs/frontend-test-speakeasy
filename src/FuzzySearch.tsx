@@ -47,15 +47,23 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
   const [filters, setFilters] = useState<{ facet: HttpLogKey; value: string }[]>([]);
   const inputRef = useRef<HTMLDivElement>(null);
   const facetKeys = Array.from(new Set(data.flatMap((obj: HttpLog) => Object.keys(obj)))) as HttpLogKey[];
-  const facetOptions: DropdownOption[] = facetKeys.map(String).filter(facet => !filters.some(f => f.facet === facet));
-  
+  const facetOptions: DropdownOption[] = facetKeys.map(String)
+    .filter(facet => !filters.some(f => f.facet === facet))
+    .filter(facet => facet.startsWith(inputValue)
+  );
+
   // Get unique values for a facet
   const getFacetValues = (facet: HttpLogKey): DropdownOption[] => {
+    if (!selectedFacet) return [];
+
+    const valueFilter = inputValue.replace(`${selectedFacet}:`, '');
+
     const filtered = filters.reduce(
         (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]) === filter.value),
         data
-      );
-    return Array.from(new Set(filtered.map((obj: HttpLog) => obj[facet]).filter(Boolean))).map(String);
+      ).filter(logItem => String(logItem[selectedFacet]).startsWith(valueFilter));
+
+    return Array.from(new Set(filtered.map((obj: HttpLog) => obj[facet]))).map(String);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,8 +80,8 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
   const handleSelect = (value: string) => {
     if (mode === 'facet') {
       setSelectedFacet(value as HttpLogKey);
+      setInputValue(`${value}:`);
       setMode('value');
-      setInputValue("");
       setShowDropdown(true);
     } else if (mode === 'value' && selectedFacet) {
       // Add filter badge
@@ -110,7 +118,6 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
 
   return (
     <div className="w-full" ref={inputRef}>
-      {/* Render badges for each filter */}
       <div className="flex flex-wrap gap-2 mb-2">
         {filters.map((filter, idx) => (
           <Tag
