@@ -2,7 +2,6 @@
 import { useState, useRef } from "react";
 import type { HttpLog } from "./types";
 import { Dropdown, DropdownOption } from "./Dropdown";
-import { Input } from "@speakeasy-api/moonshine";
 // Tag component with states: 'started' and 'completed'
 interface TagProps {
   children: React.ReactNode;
@@ -39,59 +38,91 @@ interface FuzzySearchProps {
 type HttpLogKey = keyof HttpLog;
 
 export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
-  const [inputValue, setInputValue] = useState("");
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [mode, setMode] = useState<'facet' | 'value'>('facet');
-  const [selectedFacet, setSelectedFacet] = useState<HttpLogKey | null>(null);
-  // Store selected filters as array of {facet, value}
+  // Completed tags
   const [filters, setFilters] = useState<{ facet: HttpLogKey; value: string }[]>([]);
-  const inputRef = useRef<HTMLDivElement>(null);
+  // Tag in progress ("started" input)
+  const [startedInput, setStartedInput] = useState("");
+  const [startedMode, setStartedMode] = useState<'facet' | 'value'>('facet');
+  const [startedFacet, setStartedFacet] = useState<HttpLogKey | null>(null);
+  // Dropdown
+  const [showDropdown, setShowDropdown] = useState(false);
+  // Invisible input (always present, full width)
+  const invisibleInputRef = useRef<HTMLInputElement>(null);
+  const startedInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const facetKeys = Array.from(new Set(data.flatMap((obj: HttpLog) => Object.keys(obj)))) as HttpLogKey[];
   const facetOptions: DropdownOption[] = facetKeys.map(String)
     .filter(facet => !filters.some(f => f.facet === facet))
-    .filter(facet => facet.toLowerCase().includes(inputValue.toLowerCase())
+    .filter(facet => facet.toLowerCase().includes(startedInput.toLowerCase())
   );
 
   // Get unique values for a facet
   const getFacetValues = (facet: HttpLogKey): DropdownOption[] => {
-    if (!selectedFacet) return [];
+    if (!startedFacet) return [];
 
-    const valueFilter = inputValue.replace(`${selectedFacet}:`, '');
-
+    const valueFilter = startedInput.replace(`${startedFacet}:`, "");
     const filtered = filters.reduce(
-        (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase()),
-        data
-      ).filter(logItem => String(logItem[selectedFacet]).toLowerCase().includes(valueFilter.toLowerCase()));
-
+      (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase()),
+      data
+    ).filter(logItem => String(logItem[startedFacet]).toLowerCase().includes(valueFilter.toLowerCase()));
     return Array.from(new Set(filtered.map((obj: HttpLog) => obj[facet]))).map(String);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.value.includes(":")) {
-      setMode('value');
+  // Invisible input handlers
+  const handleInvisibleInputFocus = () => {
+    setShowDropdown(true);
+    // If there is a started input, clear it (delete incomplete tag)
+    if (startedInput.length > 0) {
+      setStartedInput("");
+      setStartedMode('facet');
+      setStartedFacet(null);
+      setTimeout(() => invisibleInputRef.current?.focus(), 0);
+    }
+  };
+
+  const handleInvisibleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Move value to started input and focus it
+    setStartedInput(e.target.value);
+    setStartedMode('facet');
+    setStartedFacet(null);
+    setTimeout(() => startedInputRef.current?.focus(), 0);
+  };
+
+  // Started input handlers
+  const handleStartedInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setStartedInput(value);
+    if (value.includes(":")) {
+      setStartedMode('value');
+      const facet = value.split(":")[0];
+      setStartedFacet(facet as HttpLogKey);
     } else {
-      setMode('facet');
+      setStartedMode('facet');
+      setStartedFacet(null);
     }
 
-    setInputValue(e.target.value);
+    if (value.length === 0) {
+        setTimeout(() => invisibleInputRef.current?.focus(), 0);
+    }
     setShowDropdown(true);
   };
 
-  const dropdownOptions: DropdownOption[] = mode === 'facet'
+  const dropdownOptions: DropdownOption[] = startedMode === 'facet'
     ? facetOptions
-    : selectedFacet
-      ? getFacetValues(selectedFacet)
+    : startedFacet
+      ? getFacetValues(startedFacet)
       : [];
 
   const handleSelect = (value: string) => {
-    if (mode === 'facet') {
-      setSelectedFacet(value as HttpLogKey);
-      setInputValue(`${value}:`);
-      setMode('value');
+    if (startedMode === 'facet') {
+      setStartedInput(`${value}:`);
+      setStartedMode('value');
+      setStartedFacet(value as HttpLogKey);
       setShowDropdown(true);
-    } else if (mode === 'value' && selectedFacet) {
+      setTimeout(() => startedInputRef.current?.focus(), 0);
+    } else if (startedMode === 'value' && startedFacet) {
       // Add filter badge
-      const newFilters = [...filters, { facet: selectedFacet, value }];
+      const newFilters = [...filters, { facet: startedFacet, value }];
       setFilters(newFilters);
       // Filter data and call onChange
       const filtered = newFilters.reduce(
@@ -99,17 +130,16 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
         data
       );
       onChange(filtered);
-      setInputValue("");
+      setStartedInput("");
+      setStartedMode('facet');
+      setStartedFacet(null);
       setShowDropdown(false);
-      setMode('facet');
-      setSelectedFacet(null);
+      setTimeout(() => invisibleInputRef.current?.focus(), 0);
     }
   };
 
   const handleClose = () => {
     setShowDropdown(false);
-    setMode('facet');
-    setSelectedFacet(null);
   };
 
   const handleRemoveFilter = (idx: number) => {
@@ -120,38 +150,65 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
       data
     );
     onChange(filtered);
+    setTimeout(() => invisibleInputRef.current?.focus(), 0);
   };
 
   return (
-    <div className="w-full" ref={inputRef}>
-      <div className="flex flex-wrap gap-2 mb-2">
+    <div className="w-full">
+      <div
+        className="bg-background placeholder:text-muted-foreground text-foreground w-full rounded-md py-2 text-sm shadow-sm outline-none placeholder:transition-colors placeholder:duration-500 disabled:cursor-not-allowed disabled:opacity-50 border flex flex-wrap gap-2 items-center px-2"
+        ref={containerRef}
+      >
+        {/* Completed tags */}
         {filters.map((filter, idx) => (
           <Tag
             key={idx}
-            state="started"
+            state="completed"
             onClick={() => handleRemoveFilter(idx)}
           >
             {filter.facet}: {filter.value} ✕
           </Tag>
         ))}
+        {/* Started input inside tag */}
+        {startedInput.length > 0 && (
+          <Tag state="started">
+            <input
+              ref={startedInputRef}
+              value={startedInput}
+              onChange={handleStartedInputChange}
+              size={Math.max(1, startedInput.length)}
+              onFocus={() => setShowDropdown(true)}
+              onBlur={handleInvisibleInputFocus}
+              placeholder={startedMode === 'facet' ? 'Choose a facet…' : startedFacet ? `Choose value for ${startedFacet}…` : ''}
+              className="w-full rounded-md py-0 text-sm shadow-sm outline-none placeholder:transition-colors placeholder:duration-500 disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ minWidth: 40, width: 'auto', display: 'inline-block', background: 'transparent', color: 'inherit' }}
+              autoFocus
+            />
+          </Tag>
+        )}
+        {/* Invisible input (always present, full width) */}
+        <input
+          ref={invisibleInputRef}
+          className="flex-1 bg-transparent border-none outline-none min-w-[80px]"
+          style={{ minWidth: 80, width: startedInput.length > 0 ? 0 : '100%', opacity: startedInput.length > 0 ? 0.2 : 1, transition: 'opacity 0.2s' }}
+          value={''}
+          onFocus={handleInvisibleInputFocus}
+          onChange={handleInvisibleInputChange}
+          tabIndex={0}
+          placeholder={filters.length === 0 && startedInput.length === 0 ? 'Type to add filter…' : ''}
+          aria-label="Add filter"
+        />
       </div>
-      <Input
-        value={inputValue}
-        onChange={handleInputChange}
-        onFocus={() => setShowDropdown(true)}
-        onKeyDown={() => setShowDropdown(true)}
-        placeholder={mode === 'facet' ? 'Choose a facet…' : selectedFacet ? `Choose value for ${selectedFacet}…` : ''}
-      />
       <Dropdown
         options={dropdownOptions}
-        anchorRef={inputRef}
+        anchorRef={containerRef}
         visible={showDropdown}
         onSelect={handleSelect}
         onClose={handleClose}
-        filter={mode === 'facet'
-          ? inputValue
-          : selectedFacet
-            ? inputValue.replace(`${selectedFacet}:`, '')
+        filter={startedMode === 'facet'
+          ? startedInput
+          : startedFacet
+            ? startedInput.replace(`${startedFacet}:`, '')
             : ''}
       />
     </div>
