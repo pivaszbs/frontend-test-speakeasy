@@ -47,11 +47,15 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
   const [filters, setFilters] = useState<{ facet: HttpLogKey; value: string }[]>([]);
   const inputRef = useRef<HTMLDivElement>(null);
   const facetKeys = Array.from(new Set(data.flatMap((obj: HttpLog) => Object.keys(obj)))) as HttpLogKey[];
-  const facetOptions: DropdownOption[] = facetKeys.map(String);
+  const facetOptions: DropdownOption[] = facetKeys.map(String).filter(facet => !filters.some(f => f.facet === facet));
   
   // Get unique values for a facet
   const getFacetValues = (facet: HttpLogKey): DropdownOption[] => {
-    return Array.from(new Set(data.map((obj: HttpLog) => obj[facet]).filter(Boolean))).map(String);
+    const filtered = filters.reduce(
+        (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]) === filter.value),
+        data
+      );
+    return Array.from(new Set(filtered.map((obj: HttpLog) => obj[facet]).filter(Boolean))).map(String);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,7 +107,7 @@ export function FuzzySearch({ data, onChange }: FuzzySearchProps) {
     );
     onChange(filtered);
   };
-  
+
   return (
     <div className="w-full" ref={inputRef}>
       {/* Render badges for each filter */}
