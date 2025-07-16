@@ -31,14 +31,17 @@ export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose }: Dro
     const handleKey = (e: KeyboardEvent) => {
       if (!visible) return;
 
-      e.preventDefault();
       if (e.key === "ArrowDown") {
+        e.preventDefault();
         setActiveIndex((prev) => (prev + 1) % options.length);
       } else if (e.key === "ArrowUp") {
+        e.preventDefault();
         setActiveIndex((prev) => (prev - 1 + options.length) % options.length);
       } else if (e.key === "Enter") {
+        e.preventDefault();
         onSelect(options[activeIndex]);
       } else if (e.key === "Escape") {
+        e.preventDefault();
         onClose();
       }
     };
