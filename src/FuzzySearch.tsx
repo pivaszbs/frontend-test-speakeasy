@@ -13,9 +13,10 @@ type HttpLogKey = keyof HttpLog;
 export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (data: HttpLog[]) => void }) {
   const [filters, setFilters] = useState<{ facet: HttpLogKey; value: string }[]>([]);
   const [startedInput, setStartedInput] = useState("");
-  const [startedMode, setStartedMode] = useState<'facet' | 'value'>('facet');
+  const [startedMode, setStartedMode] = useState<'facet' | 'value'>("facet");
   const [startedFacet, setStartedFacet] = useState<HttpLogKey | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [initialActiveIndex, setInitialActiveIndex] = useState<number | undefined>(undefined);
   const invisibleInputRef = useRef<HTMLInputElement>(null);
   const startedInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,7 +35,7 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
       (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase()),
       data
     ).filter((logItem: HttpLog) => String(logItem[startedFacet]).toLowerCase().includes(valueFilter.toLowerCase()));
-    return Array.from(new Set(filtered.map((obj: HttpLog) => obj[facet]))).map(String);
+    return Array.from(new Set(filtered.map((obj: HttpLog) => obj[facet]))).filter(Boolean).map(String);
   }
 
   function handleTagFocus(idx: number, filter: { facet: HttpLogKey; value: string }) {
@@ -90,6 +91,24 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
         focusLastTag();
       }
     }
+    // Open dropdown on ArrowDown/ArrowUp if closed and options exist
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !showDropdown && dropdownOptions.length > 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowDropdown(true);
+      setInitialActiveIndex(e.key === 'ArrowDown' ? 0 : dropdownOptions.length - 1);
+    }
+  }
+
+  // Handler for container (for keyboard accessibility)
+  function handleContainerKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    // Only trigger if focus is on the container itself (not on input or tag)
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !showDropdown && dropdownOptions.length > 0) {
+      e.preventDefault();
+      setShowDropdown(true);
+      setInitialActiveIndex(e.key === 'ArrowDown' ? 0 : dropdownOptions.length - 1);
+      e.stopPropagation();
+    }
   }
 
   function handleInvisibleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -114,6 +133,7 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
       focusInput(invisibleInputRef);
     }
     setShowDropdown(true);
+    setInitialActiveIndex(undefined);
   }
 
   const dropdownOptions: DropdownOption[] =
@@ -129,6 +149,7 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
       setStartedMode('value');
       setStartedFacet(value as HttpLogKey);
       setShowDropdown(true);
+      setInitialActiveIndex(undefined);
       focusInput(startedInputRef);
     } else if (startedMode === 'value' && startedFacet) {
       const newFilters = [...filters, { facet: startedFacet, value }];
@@ -142,6 +163,7 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
       setStartedMode('facet');
       setStartedFacet(null);
       setShowDropdown(false);
+      setInitialActiveIndex(undefined);
       focusInput(invisibleInputRef);
     }
   }
@@ -166,6 +188,7 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
       <div
         className="bg-background placeholder:text-muted-foreground text-foreground w-full rounded-md py-2 text-sm shadow-sm outline-none placeholder:transition-colors placeholder:duration-500 disabled:cursor-not-allowed disabled:opacity-50 border flex flex-wrap gap-2 items-center px-2"
         ref={containerRef}
+        onKeyDown={handleContainerKeyDown}
       >
         {filters.map((filter, idx) => (
           <Tag
@@ -176,7 +199,7 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
             data-tag-idx={idx}
             onFocus={handleTagFocus(idx, filter)}
           >
-            {filter.facet}: {filter.value} ✕
+            {filter.facet}: {filter.value}
           </Tag>
         ))}
         {/* Started input inside tag */}
@@ -197,7 +220,7 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
         {/* Invisible input (always present, full width) */}
         <input
           ref={invisibleInputRef}
-          className="flex-1 bg-transparent border-none outline-none min-w-[80px]"
+          className="flex-1 py-1 bg-transparent border-none outline-none min-w-[80px]"
           style={{ minWidth: 80, width: startedInput.length > 0 ? 0 : '100%', opacity: startedInput.length > 0 ? 0.2 : 1, transition: 'opacity 0.2s' }}
           value={''}
           // onBlur={handleClose}
@@ -212,7 +235,7 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
       <Dropdown
         options={dropdownOptions}
         anchorRef={containerRef}
-        visible={showDropdown}
+        show={showDropdown}
         onSelect={handleSelect}
         onClose={handleClose}
         filter={startedMode === 'facet'
@@ -220,6 +243,7 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
           : startedFacet
             ? startedInput.replace(`${startedFacet}:`, '')
             : ''}
+        initialActiveIndex={initialActiveIndex}
       />
     </div>
   );

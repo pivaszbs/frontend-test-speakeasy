@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, act } from "react";
 import ReactDOM from "react-dom";
 
 export type DropdownOption = string;
@@ -6,10 +6,11 @@ export type DropdownOption = string;
 interface DropdownProps {
   options: DropdownOption[];
   anchorRef: React.RefObject<HTMLElement>;
-  visible: boolean;
+  show: boolean;
   onSelect: (value: string) => void;
   onClose: () => void;
   filter?: string;
+  initialActiveIndex?: number;
 }
 
 function highlightMatch(option: string, filter: string | undefined) {
@@ -28,10 +29,12 @@ function highlightMatch(option: string, filter: string | undefined) {
   );
 }
 
-export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose, filter }: DropdownProps) => {
+export const Dropdown = ({ options, anchorRef, show, onSelect, onClose, filter, initialActiveIndex }: DropdownProps) => {
   const [style, setStyle] = useState<React.CSSProperties>({});
   const optionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
+
+  const visible = show && options.length > 0;
 
   useEffect(() => {
     if (visible && anchorRef.current) {
@@ -50,10 +53,9 @@ export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose, filte
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Internal keyboard navigation
+  // Internal keyboard navigation (only when visible)
   useEffect(() => {
     if (!visible) return;
-
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -62,6 +64,7 @@ export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose, filte
         e.preventDefault();
         setActiveIndex((prev) => (prev - 1 + options.length) % options.length);
       } else if (e.key === "Enter" || e.key === " ") {
+
         e.preventDefault();
         onSelect(options[activeIndex]);
       } else if (e.key === "Escape") {
@@ -69,9 +72,7 @@ export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose, filte
         onClose();
       }
     };
-
     window.addEventListener("keydown", handleKey);
-
     return () => window.removeEventListener("keydown", handleKey);
   }, [visible, options, onSelect, onClose, activeIndex]);
 
@@ -79,7 +80,18 @@ export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose, filte
     if (activeIndex >= options.length) {
       setActiveIndex(options.length - 1);
     }
-  }, [options])
+    if (activeIndex < 0) {
+      setActiveIndex(0);
+    }
+  }, [visible, initialActiveIndex, options.length]);
+
+
+  // Set activeIndex when dropdown is opened and initialActiveIndex changes
+  useEffect(() => {
+    if (visible && typeof initialActiveIndex === 'number' && options.length > 0) {
+      setActiveIndex(Math.max(0, Math.min(initialActiveIndex, options.length - 1)));
+    }
+  }, [visible, initialActiveIndex, options.length]);
 
   if (!visible || options.length === 0) return null;
 
@@ -101,7 +113,6 @@ export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose, filte
           aria-selected={index === activeIndex}
           tabIndex={-1}
           onClick={() => onSelect(option)}
-          onMouseEnter={() => setActiveIndex(index)}
           className={`p-2 cursor-pointer hover:bg-zinc-800 ${index === activeIndex ? "bg-zinc-800" : ""}`}
         >
           {highlightMatch(option, filter)}
