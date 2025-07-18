@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import ReactDOM from "react-dom";
-import { useClickOutside } from "./useClickOutside";
-
 
 export type DropdownOption = string;
 
@@ -16,8 +14,11 @@ interface DropdownProps {
 
 function highlightMatch(option: string, filter: string | undefined) {
   if (!filter) return option;
+
   const idx = option.toLowerCase().indexOf(filter.toLowerCase());
+
   if (idx === -1) return option;
+  
   return (
     <>
       {option.slice(0, idx)}
@@ -49,13 +50,11 @@ export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose, filte
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useClickOutside([anchorRef, dropdownRef], () => onClose());
-
   // Internal keyboard navigation
   useEffect(() => {
     if (!visible) return;
+
     const handleKey = (e: KeyboardEvent) => {
-      if (!visible) return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setActiveIndex((prev) => (prev + 1) % options.length);
@@ -70,9 +69,17 @@ export const Dropdown = ({ options, anchorRef, visible, onSelect, onClose, filte
         onClose();
       }
     };
+
     window.addEventListener("keydown", handleKey);
+
     return () => window.removeEventListener("keydown", handleKey);
   }, [visible, options, onSelect, onClose, activeIndex]);
+
+  useEffect(() => {
+    if (activeIndex >= options.length) {
+      setActiveIndex(options.length - 1);
+    }
+  }, [options])
 
   if (!visible || options.length === 0) return null;
 
