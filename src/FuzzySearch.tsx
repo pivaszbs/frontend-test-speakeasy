@@ -1,7 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import type { HttpLog } from "./types";
 import { Dropdown, DropdownOption } from "./Dropdown";
-import { Tag, TagProps } from "./Tag";
+import { Tag } from "./Tag";
 
 // Helper to focus an input ref after a tick
 function focusInput(ref: React.RefObject<HTMLInputElement>) {
@@ -9,11 +9,12 @@ function focusInput(ref: React.RefObject<HTMLInputElement>) {
 }
 
 type HttpLogKey = keyof HttpLog;
+type Filter = { facet?: HttpLogKey; value: string };
 
 export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (data: HttpLog[]) => void }) {
-  const [filters, setFilters] = useState<{ facet: HttpLogKey; value: string }[]>([]);
+  const [filters, setFilters] = useState<Filter[]>([]);
   const [startedInput, setStartedInput] = useState("");
-  const [startedMode, setStartedMode] = useState<'facet' | 'value'>("facet");
+  const [startedMode, setStartedMode] = useState<'facet' | 'value' | 'query'>("facet");
   const [startedFacet, setStartedFacet] = useState<HttpLogKey | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [initialActiveIndex, setInitialActiveIndex] = useState<number | undefined>(undefined);
@@ -32,19 +33,34 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
     if (!startedFacet) return [];
     const valueFilter = startedInput.replace(`${startedFacet}:`, "");
     const filtered = filters.reduce(
-      (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase()),
+      (acc, filter) => acc.filter((obj: HttpLog) => {
+        if (filter.facet) {
+          return String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase();
+        } else {
+          // If no facet, match value substring in any field
+          return Object.values(obj).some(v => String(v).toLowerCase().includes(filter.value.toLowerCase()));
+        }
+      }),
       data
     ).filter((logItem: HttpLog) => String(logItem[startedFacet]).toLowerCase().includes(valueFilter.toLowerCase()));
+
     return Array.from(new Set(filtered.map((obj: HttpLog) => obj[facet]))).filter(Boolean).map(String);
   }
 
-  function handleTagFocus(idx: number, filter: { facet: HttpLogKey; value: string }) {
+  function handleTagFocus(idx: number, filter: Filter) {
     return () => {
       const newFilters = filters.filter((_, i) => i !== idx);
       setFilters(newFilters);
-      setStartedInput(`${filter.facet}:${filter.value}`.trim());
-      setStartedMode('value');
-      setStartedFacet(filter.facet);
+      if (filter.facet) {
+        setStartedInput(`${filter.facet}:${filter.value}`.trim());
+        setStartedMode('value');
+        setStartedFacet(filter.facet);
+      } else {
+        setStartedInput(filter.value);
+        setStartedFacet(null);
+        setStartedMode('query');
+      }
+
       focusInput(startedInputRef);
       if (startedInputRef.current) {
         const len = startedInputRef.current.value.length;
@@ -76,13 +92,21 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
       e.preventDefault();
       const newFilters = filters.slice(0, -1);
       setFilters(newFilters);
-      const filtered = newFilters.reduce(
-        (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase()),
-        data
-      );
+const filtered = newFilters.reduce(
+  (acc, filter) => acc.filter((obj: HttpLog) => {
+    if (filter.facet) {
+      return String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase();
+    } else {
+      // If no facet, match value substring in any field
+      return Object.values(obj).some(v => String(v).toLowerCase().includes(filter.value.toLowerCase()));
+    }
+  }),
+  data
+)
       onChange(filtered);
       return;
     }
+
     if (
       (e.key === 'ArrowLeft' && (invisibleInputRef.current?.selectionStart === 0))
     ) {
@@ -91,18 +115,10 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
         focusLastTag();
       }
     }
-    // Open dropdown on ArrowDown/ArrowUp if closed and options exist
-    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !showDropdown && dropdownOptions.length > 0) {
-      e.preventDefault();
-      e.stopPropagation();
-      setShowDropdown(true);
-      setInitialActiveIndex(e.key === 'ArrowDown' ? 0 : dropdownOptions.length - 1);
-    }
   }
 
   // Handler for container (for keyboard accessibility)
   function handleContainerKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    // Only trigger if focus is on the container itself (not on input or tag)
     if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !showDropdown && dropdownOptions.length > 0) {
       e.preventDefault();
       setShowDropdown(true);
@@ -112,8 +128,13 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
   }
 
   function handleInvisibleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setStartedInput(e.target.value);
-    setStartedMode('facet');
+    const value = e.target.value;
+    if (value === `"`) {
+      setStartedMode("query");
+    } else {
+      setStartedMode("facet");
+    }
+    setStartedInput(value);
     setStartedFacet(null);
     focusInput(startedInputRef);
   }
@@ -125,6 +146,30 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
       setStartedMode('value');
       const facet = value.split(":")[0];
       setStartedFacet(facet as HttpLogKey);
+    } else if (value.startsWith('"')) {
+      setStartedMode('query');
+      setStartedFacet(null);
+      if (value.endsWith('"')) {
+        const newFilters = [...filters, { value: value.replace(/"/g, '') }];
+        setFilters(newFilters);
+        const filtered = newFilters.reduce(
+        (acc, filter) => acc.filter((obj: HttpLog) => {
+          if (filter.facet) {
+            return String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase();
+          } else {
+            return Object.values(obj).some(v => String(v).toLowerCase().includes(filter.value.toLowerCase()));
+          }
+        }),
+          data
+        );
+        onChange(filtered);
+        setStartedInput("");
+        setStartedMode('facet');
+        setStartedFacet(null);
+        setShowDropdown(false);
+        setInitialActiveIndex(undefined);
+        focusInput(invisibleInputRef);
+      }
     } else {
       setStartedMode('facet');
       setStartedFacet(null);
@@ -136,12 +181,18 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
     setInitialActiveIndex(undefined);
   }
 
-  const dropdownOptions: DropdownOption[] =
-    startedMode === 'facet'
-      ? facetOptions
-      : startedFacet
-        ? getFacetValues(startedFacet)
-        : [];
+  const dropdownOptions: DropdownOption[] = useMemo(() => {
+    switch (startedMode) {
+      case 'facet':
+        return facetOptions;
+      case 'value':
+        return startedFacet ? getFacetValues(startedFacet) : [];
+      case 'query':
+        return [];
+      default:
+        return [];
+    }
+  }, [startedMode, facetOptions, startedFacet]);
 
   function handleSelect(value: string) {
     if (startedMode === 'facet') {
@@ -155,7 +206,13 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
       const newFilters = [...filters, { facet: startedFacet, value }];
       setFilters(newFilters);
       const filtered = newFilters.reduce(
-        (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase()),
+          (acc, filter) => acc.filter((obj: HttpLog) => {
+            if (filter.facet) {
+              return String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase();
+            } else {
+              return Object.values(obj).some(v => String(v).toLowerCase().includes(filter.value.toLowerCase()));
+            }
+          }),
         data
       );
       onChange(filtered);
@@ -176,7 +233,13 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
     const newFilters = filters.filter((_, i) => i !== idx);
     setFilters(newFilters);
     const filtered = newFilters.reduce(
-      (acc, filter) => acc.filter((obj: HttpLog) => String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase()),
+        (acc, filter) => acc.filter((obj: HttpLog) => {
+          if (filter.facet) {
+            return String(obj[filter.facet]).toLowerCase() === filter.value.toLowerCase();
+          } else {
+            return Object.values(obj).some(v => String(v).toLowerCase().includes(filter.value.toLowerCase()));
+          }
+        }),
       data
     );
     onChange(filtered);
@@ -199,10 +262,9 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
             data-tag-idx={idx}
             onFocus={handleTagFocus(idx, filter)}
           >
-            {filter.facet}: {filter.value}
+            {filter.facet ? `${filter.facet}: ` : ''} {filter.value}
           </Tag>
         ))}
-        {/* Started input inside tag */}
         {startedInput.length > 0 && (
           <Tag state="started">
             <input
@@ -217,13 +279,11 @@ export function FuzzySearch({ data, onChange }: { data: HttpLog[]; onChange: (da
             />
           </Tag>
         )}
-        {/* Invisible input (always present, full width) */}
         <input
           ref={invisibleInputRef}
           className="flex-1 py-1 bg-transparent border-none outline-none min-w-[80px]"
           style={{ minWidth: 80, width: startedInput.length > 0 ? 0 : '100%', opacity: startedInput.length > 0 ? 0.2 : 1, transition: 'opacity 0.2s' }}
           value={''}
-          // onBlur={handleClose}
           onFocus={handleInvisibleInputFocus}
           onChange={handleInvisibleInputChange}
           onKeyDown={handleInvisibleInputKeyDown}

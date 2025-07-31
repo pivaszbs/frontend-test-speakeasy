@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, act } from "react";
+import { useState, useEffect, useRef } from "react";
 import ReactDOM from "react-dom";
 
 export type DropdownOption = string;
@@ -64,7 +64,6 @@ export const Dropdown = ({ options, anchorRef, show, onSelect, onClose, filter, 
         e.preventDefault();
         setActiveIndex((prev) => (prev - 1 + options.length) % options.length);
       } else if (e.key === "Enter" || e.key === " ") {
-
         e.preventDefault();
         onSelect(options[activeIndex]);
       } else if (e.key === "Escape") {
